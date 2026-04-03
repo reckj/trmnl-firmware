@@ -39,7 +39,7 @@
 
 #define DISPLAY_BMP_IMAGE_SIZE 48062 // in bytes - 62 bytes - header; 48000 bytes - bitmap (480*800 1bpp) / 8
 #define DEFAULT_IMAGE_SIZE 48000
-#ifdef BOARD_TRMNL_X
+#if defined(BOARD_TRMNL_X) || defined(BOARD_LILYGO_T5_47_S3)
 #define MAX_IMAGE_SIZE 750000 // Use PSRAM on the ESP32-S3
 #else
 #define MAX_IMAGE_SIZE 90000 // largest compressed image we can receive
@@ -80,6 +80,9 @@ enum WIFI_CONNECT_RETRY_TIME // Time to sleep before trying to connect to the Wi
 #elif defined(BOARD_TRMNL_X)
 #define PIN_INTERRUPT 0
 #define DEVICE_MODEL "x"
+#elif defined(BOARD_LILYGO_T5_47_S3)
+#define PIN_INTERRUPT 21        // onboard button on GPIO 21
+#define DEVICE_MODEL "lilygo_t5_47_s3"
 #elif defined(BOARD_WAVESHARE_ESP32_DRIVER)
 #define PIN_INTERRUPT 33
 #define DEVICE_MODEL "waveshare"
@@ -121,6 +124,8 @@ enum WIFI_CONNECT_RETRY_TIME // Time to sleep before trying to connect to the Wi
 #define PIN_BATTERY 1
 #elif defined(BOARD_XTEINK_X4)
 #define PIN_BATTERY 0
+#elif defined(BOARD_LILYGO_T5_47_S3)
+#define PIN_BATTERY 14
 #else
 #define PIN_BATTERY 3
 #endif

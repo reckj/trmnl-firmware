@@ -124,6 +124,10 @@
 #elif defined(BOARD_TRMNL_X)
    #define FAKE_BATTERY_VOLTAGE
 
+#elif defined(BOARD_LILYGO_T5_47_S3)
+   // LilyGo T5-4.7" S3 uses parallel e-paper (ED047TC1) driven by FastEPD
+   // No SPI pin definitions needed - parallel interface is handled by FastEPD
+
 #elif defined(BOARD_SEEED_RETERMINAL_E1001) || defined(BOARD_SEEED_RETERMINAL_E1002)
    // Pin definition for reTerminal E1001 & E1002
    #define EPD_SCK_PIN  7
