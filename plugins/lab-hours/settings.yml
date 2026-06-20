@@ -1,0 +1,63 @@
+---
+# TRMNL private plugin — Lab Opening Times (Google Calendar, direct polling)
+# Import this folder (zipped, flat) via TRMNL: Plugins -> Private Plugin -> Import.
+name: Lab Opening Times
+strategy: polling
+# How often TRMNL re-fetches the calendar (minutes): 15, 60, 360, 720, 1440.
+refresh_interval: 15
+polling_verb: GET
+polling_headers: ''
+no_screen_padding: 'no'
+dark_mode: 'no'
+
+# Google Calendar API v3 events.list.
+# - ##{{ field }}  -> a form-field value below (TRMNL merge syntax)
+# - {{ ... }}      -> a Liquid helper evaluated by TRMNL when it builds the URL
+# We over-fetch a -1 day .. +9 day window and filter precisely inside full.liquid.
+polling_url: >-
+  https://www.googleapis.com/calendar/v3/calendars/##{{ calendar_id | url_encode }}/events?key=##{{ api_key }}&singleEvents=true&orderBy=startTime&maxResults=250&timeMin={{ 1 | days_ago }}T00:00:00Z&timeMax={{ "now" | date: "%s" | plus: 777600 | date: "%Y-%m-%dT%H:%M:%SZ" }}
+
+custom_fields:
+  - keyname: lab_name
+    name: Lab name
+    field_type: text
+    default: Lab
+    description: Shown in the title bar.
+
+  - keyname: calendar_id
+    name: Google Calendar ID
+    field_type: text
+    description: e.g. abc123@group.calendar.google.com (calendar must be public).
+
+  - keyname: api_key
+    name: Google API key
+    field_type: password
+    description: API key restricted to the Google Calendar API.
+
+  - keyname: open_keywords
+    name: OPEN keywords
+    field_type: text
+    default: "open"
+    description: Comma-separated words. If an event title contains any of these it counts as OPEN. Matching is case-insensitive.
+
+  - keyname: busy_keywords
+    name: BUSY / DND keywords
+    field_type: text
+    default: "busy,dnd,do not disturb,reserved,maintenance,workshop,in use"
+    description: Title words that mean BUSY / do-not-disturb. Case-insensitive.
+
+  - keyname: closed_keywords
+    name: CLOSED keywords
+    field_type: text
+    default: "closed,holiday,vacation,public holiday"
+    description: Title words that mean CLOSED / holiday. Case-insensitive.
+
+  - keyname: default_state
+    name: Default state for unmatched events
+    field_type: select
+    default: open
+    options:
+      - open
+      - busy
+      - closed
+    description: Used when an event title matches none of the keyword lists above.

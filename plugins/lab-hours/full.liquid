@@ -1,0 +1,181 @@
+{%- comment -%}
+=====================================================================
+ Lab Opening Times — FULL layout (800 x 480, 1-bit e-ink)
+ Data: Google Calendar API v3 events.list  ->  events at {{ items }}
+ State comes from KEYWORDS in each event's title (case-insensitive).
+ Left column  = current status, large (today's hours stay visible,
+                smaller, when CLOSED / DND).
+ Right column = the next 7 days.
+=====================================================================
+{%- endcomment -%}
+
+{%- comment -%} ---- time base (all comparisons in UTC epoch seconds) ---- {%- endcomment -%}
+{%- assign now_abs = trmnl.system.timestamp_utc | plus: 0 -%}
+{%- assign offset  = trmnl.user.utc_offset | plus: 0 -%}
+{%- assign now_local = now_abs | plus: offset -%}
+{%- assign today = now_local | date: "%Y-%m-%d" -%}
+{%- assign today_n = today | remove: "-" | plus: 0 -%}
+{%- assign today_label = now_local | date: "%a, %b %-d" -%}
+
+{%- comment -%} ---- keyword -> state lists (lower-cased, comma-separated) ---- {%- endcomment -%}
+{%- assign open_kws   = open_keywords   | downcase | replace: ", ", "," | split: "," -%}
+{%- assign busy_kws   = busy_keywords   | downcase | replace: ", ", "," | split: "," -%}
+{%- assign closed_kws = closed_keywords | downcase | replace: ", ", "," | split: "," -%}
+
+{%- comment -%} =====================================================
+     PASS 1 — current status now (priority closed > busy > open)
+     and today's opening-hours span (min start / max end of OPEN).
+   ===================================================== {%- endcomment -%}
+{%- assign cur_priority = 0 -%}
+{%- assign cur_state = "closed" -%}
+{%- assign cur_reason = "" -%}
+{%- assign have_hours = false -%}
+{%- assign min_abs = 0 -%}{%- assign max_abs = 0 -%}
+{%- assign open_start_lbl = "" -%}{%- assign open_end_lbl = "" -%}
+
+{%- for ev in items -%}
+  {%- comment -%} classify state from title keywords (case-insensitive) {%- endcomment -%}
+  {%- assign sum_lc = ev.summary | default: "" | downcase -%}
+  {%- assign ev_state = default_state -%}
+  {%- assign matched = false -%}
+  {%- for kw in closed_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "closed" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}
+  {%- unless matched -%}{%- for kw in busy_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "busy" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+  {%- unless matched -%}{%- for kw in open_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "open" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+
+  {%- if ev.start.date -%}
+    {%- comment -%} all-day event: covers [start.date, end.date) {%- endcomment -%}
+    {%- assign s_n = ev.start.date | remove: "-" | plus: 0 -%}
+    {%- assign e_n = ev.end.date | remove: "-" | plus: 0 -%}
+    {%- if today_n >= s_n and today_n < e_n -%}
+      {%- assign p = 0 -%}
+      {%- if ev_state == "open" -%}{%- assign p = 1 -%}{%- elsif ev_state == "busy" -%}{%- assign p = 2 -%}{%- elsif ev_state == "closed" -%}{%- assign p = 3 -%}{%- endif -%}
+      {%- if p > cur_priority -%}{%- assign cur_priority = p -%}{%- assign cur_state = ev_state -%}{%- assign cur_reason = ev.summary -%}{%- endif -%}
+    {%- endif -%}
+  {%- else -%}
+    {%- comment -%} timed event {%- endcomment -%}
+    {%- assign s_abs = ev.start.dateTime | date: "%s" | plus: 0 -%}
+    {%- assign e_abs = ev.end.dateTime | date: "%s" | plus: 0 -%}
+    {%- assign ev_day = ev.start.dateTime | date: "%Y-%m-%d" -%}
+    {%- comment -%} active right now? {%- endcomment -%}
+    {%- if now_abs >= s_abs and now_abs < e_abs -%}
+      {%- assign p = 0 -%}
+      {%- if ev_state == "open" -%}{%- assign p = 1 -%}{%- elsif ev_state == "busy" -%}{%- assign p = 2 -%}{%- elsif ev_state == "closed" -%}{%- assign p = 3 -%}{%- endif -%}
+      {%- if p > cur_priority -%}{%- assign cur_priority = p -%}{%- assign cur_state = ev_state -%}{%- assign cur_reason = ev.summary -%}{%- endif -%}
+    {%- endif -%}
+    {%- comment -%} contributes to today's opening span? {%- endcomment -%}
+    {%- if ev_state == "open" and ev_day == today -%}
+      {%- if have_hours == false or s_abs < min_abs -%}{%- assign min_abs = s_abs -%}{%- assign open_start_lbl = ev.start.dateTime | date: "%H:%M" -%}{%- endif -%}
+      {%- if have_hours == false or e_abs > max_abs -%}{%- assign max_abs = e_abs -%}{%- assign open_end_lbl = ev.end.dateTime | date: "%H:%M" -%}{%- endif -%}
+      {%- assign have_hours = true -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{%- if have_hours -%}{%- assign today_hours = open_start_lbl | append: " – " | append: open_end_lbl -%}{%- else -%}{%- assign today_hours = "—" -%}{%- endif -%}
+
+{%- comment -%} big-status copy {%- endcomment -%}
+{%- if cur_state == "open" -%}{%- assign big_label = "OPEN" -%}{%- assign big_sub = "Renting possible" -%}
+{%- elsif cur_state == "busy" -%}{%- assign big_label = "DO NOT DISTURB" -%}{%- assign big_sub = "Lab in use — please wait" -%}
+{%- else -%}{%- assign big_label = "CLOSED" -%}{%- assign big_sub = "Equipment rental unavailable" -%}{%- endif -%}
+
+<style>
+  .lab-row { display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; border-bottom:1px solid #000; }
+  .lab-row:last-child { border-bottom:0; }
+  .lab-row--today { font-weight:700; }
+  .lab-day { white-space:nowrap; }
+  .lab-hours { text-align:right; white-space:nowrap; }
+  .lab-today-box { display:flex; flex-direction:column; justify-content:center; height:100%; }
+</style>
+
+<div class="layout">
+  <div class="columns">
+
+    {%- comment -%} ================= COLUMN 1 — TODAY (large) ================= {%- endcomment -%}
+    <div class="column" style="flex:0 0 57%; padding-right:18px; border-right:2px solid #000;">
+      <div class="lab-today-box">
+        <span class="label label--gray-2">TODAY · {{ today_label }}</span>
+
+        {%- if cur_state == "open" -%}
+          <span class="value value--xxxlarge" style="line-height:1.0; margin-top:4px;">{{ big_label }}</span>
+          <span class="value value--xxlarge" style="margin-top:10px;">{{ today_hours }}</span>
+          <span class="description" style="margin-top:6px;">{{ big_sub }}</span>
+        {%- else -%}
+          <span class="value value--xxxlarge" style="line-height:1.0; margin-top:4px;">{{ big_label }}</span>
+          {%- if cur_reason != "" -%}<span class="description" style="margin-top:4px;">{{ cur_reason }}</span>{%- endif -%}
+          <span class="label label--gray-2" style="margin-top:18px;">Opening hours today</span>
+          <span class="value value--large">{{ today_hours }}</span>
+        {%- endif -%}
+      </div>
+    </div>
+
+    {%- comment -%} ================= COLUMN 2 — THIS WEEK ================= {%- endcomment -%}
+    <div class="column" style="flex:0 0 43%; padding-left:18px;">
+      <span class="title" style="display:block; margin-bottom:4px;">THIS WEEK</span>
+
+      {%- for d in (0..6) -%}
+        {%- assign day_secs = d | times: 86400 -%}
+        {%- assign day_ts = now_local | plus: day_secs -%}
+        {%- assign day_date = day_ts | date: "%Y-%m-%d" -%}
+        {%- assign day_date_n = day_date | remove: "-" | plus: 0 -%}
+        {%- assign day_wd = day_ts | date: "%a" -%}
+        {%- assign day_dom = day_ts | date: "%-d" -%}
+
+        {%- assign d_has_closed = false -%}{%- assign d_has_busy = false -%}
+        {%- assign d_have_hours = false -%}{%- assign d_min = 0 -%}{%- assign d_max = 0 -%}
+        {%- assign d_s_lbl = "" -%}{%- assign d_e_lbl = "" -%}
+
+        {%- for ev in items -%}
+          {%- assign sum_lc = ev.summary | default: "" | downcase -%}
+          {%- assign ev_state = default_state -%}
+          {%- assign matched = false -%}
+          {%- for kw in closed_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "closed" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}
+          {%- unless matched -%}{%- for kw in busy_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "busy" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+          {%- unless matched -%}{%- for kw in open_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "open" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+
+          {%- if ev.start.date -%}
+            {%- assign s_n = ev.start.date | remove: "-" | plus: 0 -%}
+            {%- assign e_n = ev.end.date | remove: "-" | plus: 0 -%}
+            {%- if day_date_n >= s_n and day_date_n < e_n -%}
+              {%- if ev_state == "closed" -%}{%- assign d_has_closed = true -%}{%- elsif ev_state == "busy" -%}{%- assign d_has_busy = true -%}{%- endif -%}
+            {%- endif -%}
+          {%- else -%}
+            {%- assign ev_day = ev.start.dateTime | date: "%Y-%m-%d" -%}
+            {%- if ev_day == day_date -%}
+              {%- if ev_state == "open" -%}
+                {%- assign s_abs = ev.start.dateTime | date: "%s" | plus: 0 -%}
+                {%- assign e_abs = ev.end.dateTime | date: "%s" | plus: 0 -%}
+                {%- if d_have_hours == false or s_abs < d_min -%}{%- assign d_min = s_abs -%}{%- assign d_s_lbl = ev.start.dateTime | date: "%H:%M" -%}{%- endif -%}
+                {%- if d_have_hours == false or e_abs > d_max -%}{%- assign d_max = e_abs -%}{%- assign d_e_lbl = ev.end.dateTime | date: "%H:%M" -%}{%- endif -%}
+                {%- assign d_have_hours = true -%}
+              {%- elsif ev_state == "closed" -%}{%- assign d_has_closed = true -%}
+              {%- elsif ev_state == "busy" -%}{%- assign d_has_busy = true -%}{%- endif -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endfor -%}
+
+        {%- comment -%} decide what to show for the day {%- endcomment -%}
+        {%- if d_has_closed and d_have_hours == false -%}
+          {%- assign day_display = "Closed" -%}
+        {%- elsif d_have_hours -%}
+          {%- assign day_display = d_s_lbl | append: "–" | append: d_e_lbl -%}
+          {%- if d_has_busy -%}{%- assign day_display = day_display | append: " ·DND" -%}{%- endif -%}
+        {%- elsif d_has_busy -%}
+          {%- assign day_display = "DND" -%}
+        {%- else -%}
+          {%- assign day_display = "Closed" -%}
+        {%- endif -%}
+
+        <div class="lab-row{% if d == 0 %} lab-row--today{% endif %}">
+          <span class="lab-day">{{ day_wd }} {{ day_dom }}{% if d == 0 %} · Today{% endif %}</span>
+          <span class="lab-hours">{{ day_display }}</span>
+        </div>
+      {%- endfor -%}
+    </div>
+
+  </div>
+</div>
+
+<div class="title_bar">
+  <span class="title">{{ lab_name | default: "Lab" }}</span>
+  <span class="instance">Equipment rental</span>
+</div>

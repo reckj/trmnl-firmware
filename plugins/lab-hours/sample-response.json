@@ -1,0 +1,47 @@
+{
+  "kind": "calendar#events",
+  "summary": "Makerspace Lab",
+  "timeZone": "Europe/Berlin",
+  "items": [
+    {
+      "summary": "Open hours",
+      "start": { "dateTime": "2026-06-20T09:00:00+02:00" },
+      "end":   { "dateTime": "2026-06-20T17:00:00+02:00" }
+    },
+    {
+      "summary": "Maintenance",
+      "start": { "dateTime": "2026-06-20T12:00:00+02:00" },
+      "end":   { "dateTime": "2026-06-20T13:00:00+02:00" }
+    },
+    {
+      "summary": "Open hours",
+      "start": { "dateTime": "2026-06-21T10:00:00+02:00" },
+      "end":   { "dateTime": "2026-06-21T16:00:00+02:00" }
+    },
+    {
+      "summary": "Open hours",
+      "start": { "dateTime": "2026-06-22T09:00:00+02:00" },
+      "end":   { "dateTime": "2026-06-22T17:00:00+02:00" }
+    },
+    {
+      "summary": "Public holiday",
+      "start": { "date": "2026-06-23" },
+      "end":   { "date": "2026-06-24" }
+    },
+    {
+      "summary": "Open hours",
+      "start": { "dateTime": "2026-06-24T09:00:00+02:00" },
+      "end":   { "dateTime": "2026-06-24T17:00:00+02:00" }
+    },
+    {
+      "summary": "Open hours",
+      "start": { "dateTime": "2026-06-25T09:00:00+02:00" },
+      "end":   { "dateTime": "2026-06-25T12:00:00+02:00" }
+    },
+    {
+      "summary": "Reserved — workshop",
+      "start": { "dateTime": "2026-06-25T14:00:00+02:00" },
+      "end":   { "dateTime": "2026-06-25T15:00:00+02:00" }
+    }
+  ]
+}

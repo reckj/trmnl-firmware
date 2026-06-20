@@ -1,0 +1,55 @@
+{%- comment -%} Lab Opening Times — half_horizontal: current status + today's hours.
+ State from KEYWORDS in event titles (case-insensitive). {%- endcomment -%}
+{%- assign now_abs = trmnl.system.timestamp_utc | plus: 0 -%}
+{%- assign offset  = trmnl.user.utc_offset | plus: 0 -%}
+{%- assign now_local = now_abs | plus: offset -%}
+{%- assign today = now_local | date: "%Y-%m-%d" -%}
+{%- assign today_n = today | remove: "-" | plus: 0 -%}
+{%- assign today_label = now_local | date: "%a, %b %-d" -%}
+{%- assign open_kws   = open_keywords   | downcase | replace: ", ", "," | split: "," -%}
+{%- assign busy_kws   = busy_keywords   | downcase | replace: ", ", "," | split: "," -%}
+{%- assign closed_kws = closed_keywords | downcase | replace: ", ", "," | split: "," -%}
+{%- assign cur_priority = 0 -%}{%- assign cur_state = "closed" -%}{%- assign cur_reason = "" -%}
+{%- assign have_hours = false -%}{%- assign min_abs = 0 -%}{%- assign max_abs = 0 -%}
+{%- assign open_start_lbl = "" -%}{%- assign open_end_lbl = "" -%}
+{%- for ev in items -%}
+  {%- assign sum_lc = ev.summary | default: "" | downcase -%}
+  {%- assign ev_state = default_state -%}{%- assign matched = false -%}
+  {%- for kw in closed_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "closed" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}
+  {%- unless matched -%}{%- for kw in busy_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "busy" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+  {%- unless matched -%}{%- for kw in open_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "open" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+  {%- if ev.start.date -%}
+    {%- assign s_n = ev.start.date | remove: "-" | plus: 0 -%}{%- assign e_n = ev.end.date | remove: "-" | plus: 0 -%}
+    {%- if today_n >= s_n and today_n < e_n -%}
+      {%- assign p = 0 -%}{%- if ev_state == "open" -%}{%- assign p = 1 -%}{%- elsif ev_state == "busy" -%}{%- assign p = 2 -%}{%- elsif ev_state == "closed" -%}{%- assign p = 3 -%}{%- endif -%}
+      {%- if p > cur_priority -%}{%- assign cur_priority = p -%}{%- assign cur_state = ev_state -%}{%- assign cur_reason = ev.summary -%}{%- endif -%}
+    {%- endif -%}
+  {%- else -%}
+    {%- assign s_abs = ev.start.dateTime | date: "%s" | plus: 0 -%}{%- assign e_abs = ev.end.dateTime | date: "%s" | plus: 0 -%}
+    {%- assign ev_day = ev.start.dateTime | date: "%Y-%m-%d" -%}
+    {%- if now_abs >= s_abs and now_abs < e_abs -%}
+      {%- assign p = 0 -%}{%- if ev_state == "open" -%}{%- assign p = 1 -%}{%- elsif ev_state == "busy" -%}{%- assign p = 2 -%}{%- elsif ev_state == "closed" -%}{%- assign p = 3 -%}{%- endif -%}
+      {%- if p > cur_priority -%}{%- assign cur_priority = p -%}{%- assign cur_state = ev_state -%}{%- assign cur_reason = ev.summary -%}{%- endif -%}
+    {%- endif -%}
+    {%- if ev_state == "open" and ev_day == today -%}
+      {%- if have_hours == false or s_abs < min_abs -%}{%- assign min_abs = s_abs -%}{%- assign open_start_lbl = ev.start.dateTime | date: "%H:%M" -%}{%- endif -%}
+      {%- if have_hours == false or e_abs > max_abs -%}{%- assign max_abs = e_abs -%}{%- assign open_end_lbl = ev.end.dateTime | date: "%H:%M" -%}{%- endif -%}
+      {%- assign have_hours = true -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if have_hours -%}{%- assign today_hours = open_start_lbl | append: " – " | append: open_end_lbl -%}{%- else -%}{%- assign today_hours = "—" -%}{%- endif -%}
+{%- if cur_state == "open" -%}{%- assign big_label = "OPEN" -%}
+{%- elsif cur_state == "busy" -%}{%- assign big_label = "DO NOT DISTURB" -%}
+{%- else -%}{%- assign big_label = "CLOSED" -%}{%- endif -%}
+
+<div class="layout layout--col layout--center">
+  <span class="label label--gray-2">TODAY · {{ today_label }}</span>
+  <span class="value value--xxlarge" style="line-height:1.0; margin-top:2px;">{{ big_label }}</span>
+  <span class="value value--large" style="margin-top:6px;">{{ today_hours }}</span>
+</div>
+
+<div class="title_bar">
+  <span class="title">{{ lab_name | default: "Lab" }}</span>
+  <span class="instance">Equipment rental</span>
+</div>
