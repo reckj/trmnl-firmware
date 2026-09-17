@@ -1,0 +1,69 @@
+{%- comment -%} Lab Opening Times — quadrant: status badge + today's opening sessions. {%- endcomment -%}
+{%- assign now_abs = "now" | date: "%s" | plus: 0 -%}
+{%- assign offset  = trmnl.user.utc_offset | plus: 0 -%}
+{%- assign now_local = now_abs | plus: offset -%}
+{%- assign today = now_local | date: "%Y-%m-%d" -%}
+{%- assign today_n = today | remove: "-" | plus: 0 -%}
+{%- assign cf = trmnl.plugin_settings.custom_fields_values -%}
+{%- assign lab_name        = cf.lab_name        | default: "Lab" -%}
+{%- assign open_keywords   = cf.open_keywords   | default: "open" -%}
+{%- assign busy_keywords   = cf.busy_keywords   | default: "busy,dnd,do not disturb,reserved,maintenance,workshop,in use" -%}
+{%- assign closed_keywords = cf.closed_keywords | default: "closed,holiday,vacation,public holiday" -%}
+{%- assign default_state   = cf.default_state   | default: "open" -%}
+{%- assign open_kws   = open_keywords   | downcase | replace: ", ", "," | split: "," -%}
+{%- assign busy_kws   = busy_keywords   | downcase | replace: ", ", "," | split: "," -%}
+{%- assign closed_kws = closed_keywords | downcase | replace: ", ", "," | split: "," -%}
+{%- assign cur_priority = 0 -%}{%- assign cur_state = "closed" -%}
+{%- assign t_sessions = "" -%}{%- assign t_has = false -%}{%- assign t_e_epoch = 0 -%}{%- assign t_s_lbl = "" -%}{%- assign t_e_lbl = "" -%}
+{%- for ev in items -%}
+  {%- assign sum_lc = ev.summary | default: "" | downcase -%}
+  {%- assign ev_state = default_state -%}{%- assign matched = false -%}
+  {%- for kw in closed_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "closed" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}
+  {%- unless matched -%}{%- for kw in busy_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "busy" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+  {%- unless matched -%}{%- for kw in open_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "open" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+  {%- if ev.start.date -%}
+    {%- assign s_n = ev.start.date | remove: "-" | plus: 0 -%}{%- assign e_n = ev.end.date | remove: "-" | plus: 0 -%}
+    {%- if today_n >= s_n and today_n < e_n -%}
+      {%- assign p = 0 -%}{%- if ev_state == "open" -%}{%- assign p = 1 -%}{%- elsif ev_state == "busy" -%}{%- assign p = 2 -%}{%- elsif ev_state == "closed" -%}{%- assign p = 3 -%}{%- endif -%}
+      {%- if p > cur_priority -%}{%- assign cur_priority = p -%}{%- assign cur_state = ev_state -%}{%- endif -%}
+    {%- endif -%}
+  {%- else -%}
+    {%- assign s_abs = ev.start.dateTime | date: "%s" | plus: 0 -%}{%- assign e_abs = ev.end.dateTime | date: "%s" | plus: 0 -%}
+    {%- assign ev_day = ev.start.dateTime | date: "%Y-%m-%d" -%}
+    {%- if now_abs >= s_abs and now_abs < e_abs -%}
+      {%- assign p = 0 -%}{%- if ev_state == "open" -%}{%- assign p = 1 -%}{%- elsif ev_state == "busy" -%}{%- assign p = 2 -%}{%- elsif ev_state == "closed" -%}{%- assign p = 3 -%}{%- endif -%}
+      {%- if p > cur_priority -%}{%- assign cur_priority = p -%}{%- assign cur_state = ev_state -%}{%- endif -%}
+    {%- endif -%}
+    {%- if ev_state == "open" and ev_day == today -%}
+      {%- if t_has == false -%}
+        {%- assign t_has = true -%}{%- assign t_s_lbl = ev.start.dateTime | date: "%H:%M" -%}{%- assign t_e_epoch = e_abs -%}{%- assign t_e_lbl = ev.end.dateTime | date: "%H:%M" -%}
+      {%- elsif s_abs <= t_e_epoch -%}
+        {%- if e_abs > t_e_epoch -%}{%- assign t_e_epoch = e_abs -%}{%- assign t_e_lbl = ev.end.dateTime | date: "%H:%M" -%}{%- endif -%}
+      {%- else -%}
+        {%- assign t_sessions = t_sessions | append: t_s_lbl | append: "–" | append: t_e_lbl | append: "|" -%}
+        {%- assign t_s_lbl = ev.start.dateTime | date: "%H:%M" -%}{%- assign t_e_epoch = e_abs -%}{%- assign t_e_lbl = ev.end.dateTime | date: "%H:%M" -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if t_has -%}{%- assign t_sessions = t_sessions | append: t_s_lbl | append: "–" | append: t_e_lbl | append: "|" -%}{%- endif -%}
+{%- assign today_sessions = t_sessions | split: "|" -%}
+{%- if cur_state == "open" -%}{%- assign big_label = "OPEN" -%}
+{%- elsif cur_state == "busy" -%}{%- assign big_label = "DND" -%}
+{%- else -%}{%- assign big_label = "CLOSED" -%}{%- endif -%}
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Doto:wght@100..900&display=swap');
+  .layout .value, .layout .label { font-family: 'Doto', system-ui, sans-serif; }
+  .layout .value { font-weight: 800; }
+</style>
+
+<div class="layout layout--col layout--center">
+  <span class="value value--large" style="line-height:1.0;">{{ big_label }}</span>
+  {%- if today_sessions.size > 0 -%}
+    {%- for s in today_sessions limit: 2 -%}<span class="label">{{ s }}</span>{%- endfor -%}
+  {%- else -%}
+    <span class="label">—</span>
+  {%- endif -%}
+  <span class="label label--gray-2" style="margin-top:2px;">{{ lab_name | default: "Lab" }}</span>
+</div>

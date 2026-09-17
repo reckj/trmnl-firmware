@@ -1,0 +1,235 @@
+{%- comment -%}
+=====================================================================
+ Lab Opening Times — FULL layout (800 x 480, 1-bit e-ink)
+ Data: Google Calendar API v3 events.list  ->  events at {{ items }}
+       (returned ordered by startTime, which the session merge relies on)
+ State from KEYWORDS in each event's title (case-insensitive).
+ Overlapping/touching OPEN events are merged into sessions, so a day
+ with morning + afternoon blocks shows TWO opening times.
+=====================================================================
+{%- endcomment -%}
+
+{%- comment -%} ---- time base (UTC epoch seconds) ---- {%- endcomment -%}
+{%- assign now_abs = "now" | date: "%s" | plus: 0 -%}
+{%- assign offset  = trmnl.user.utc_offset | plus: 0 -%}
+{%- assign now_local = now_abs | plus: offset -%}
+{%- assign today = now_local | date: "%Y-%m-%d" -%}
+{%- assign today_n = today | remove: "-" | plus: 0 -%}
+{%- assign today_label = now_local | date: "%a, %b %-d" -%}
+
+{%- comment -%} ---- form-field values ---- {%- endcomment -%}
+{%- assign cf = trmnl.plugin_settings.custom_fields_values -%}
+{%- assign lab_name        = cf.lab_name        | default: "Lab" -%}
+{%- assign open_keywords   = cf.open_keywords   | default: "open" -%}
+{%- assign busy_keywords   = cf.busy_keywords   | default: "busy,dnd,do not disturb,reserved,maintenance,workshop,in use" -%}
+{%- assign closed_keywords = cf.closed_keywords | default: "closed,holiday,vacation,public holiday" -%}
+{%- assign default_state   = cf.default_state   | default: "open" -%}
+{%- assign calendar_id     = cf.calendar_id     | default: "" -%}
+{%- assign cal_link        = cf.calendar_link   | default: "" -%}
+{%- if cal_link == "" -%}
+  {%- assign enc_id = calendar_id | url_encode -%}
+  {%- assign cal_link = "https://calendar.google.com/calendar/embed?src=" | append: enc_id -%}
+{%- endif -%}
+{%- assign info_line_1 = cf.info_line_1 | default: "rental during lab opening hours - mail for urgent requests" -%}
+{%- assign info_line_2 = cf.info_line_2 | default: "Contact: Luke Franzke, Johannes Reck, Luca Somm" -%}
+{%- comment -%} Monday of the current week (roll forward to next Monday on Sat/Sun) {%- endcomment -%}
+{%- assign wd_u = now_local | date: "%u" | plus: 0 -%}
+{%- if wd_u >= 6 -%}{%- assign mon_off = 8 | minus: wd_u -%}{%- else -%}{%- assign mon_off = 1 | minus: wd_u -%}{%- endif -%}
+{%- assign mon_secs = mon_off | times: 86400 -%}
+{%- assign monday_local = now_local | plus: mon_secs -%}
+{%- assign open_kws   = open_keywords   | downcase | replace: ", ", "," | split: "," -%}
+{%- assign busy_kws   = busy_keywords   | downcase | replace: ", ", "," | split: "," -%}
+{%- assign closed_kws = closed_keywords | downcase | replace: ", ", "," | split: "," -%}
+
+{%- comment -%} =====================================================
+     PASS 1 — current status now (priority closed > busy > open)
+     and TODAY's opening sessions (merged overlapping OPEN events).
+   ===================================================== {%- endcomment -%}
+{%- assign cur_priority = 0 -%}
+{%- assign cur_state = "closed" -%}
+{%- assign cur_reason = "" -%}
+{%- assign t_sessions = "" -%}
+{%- assign t_has = false -%}{%- assign t_e_epoch = 0 -%}{%- assign t_s_lbl = "" -%}{%- assign t_e_lbl = "" -%}
+
+{%- for ev in items -%}
+  {%- assign sum_lc = ev.summary | default: "" | downcase -%}
+  {%- assign ev_state = default_state -%}{%- assign matched = false -%}
+  {%- for kw in closed_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "closed" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}
+  {%- unless matched -%}{%- for kw in busy_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "busy" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+  {%- unless matched -%}{%- for kw in open_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "open" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+
+  {%- if ev.start.date -%}
+    {%- assign s_n = ev.start.date | remove: "-" | plus: 0 -%}
+    {%- assign e_n = ev.end.date | remove: "-" | plus: 0 -%}
+    {%- if today_n >= s_n and today_n < e_n -%}
+      {%- assign p = 0 -%}{%- if ev_state == "open" -%}{%- assign p = 1 -%}{%- elsif ev_state == "busy" -%}{%- assign p = 2 -%}{%- elsif ev_state == "closed" -%}{%- assign p = 3 -%}{%- endif -%}
+      {%- if p > cur_priority -%}{%- assign cur_priority = p -%}{%- assign cur_state = ev_state -%}{%- assign cur_reason = ev.summary -%}{%- endif -%}
+    {%- endif -%}
+  {%- else -%}
+    {%- assign s_abs = ev.start.dateTime | date: "%s" | plus: 0 -%}
+    {%- assign e_abs = ev.end.dateTime | date: "%s" | plus: 0 -%}
+    {%- assign ev_day = ev.start.dateTime | date: "%Y-%m-%d" -%}
+    {%- if now_abs >= s_abs and now_abs < e_abs -%}
+      {%- assign p = 0 -%}{%- if ev_state == "open" -%}{%- assign p = 1 -%}{%- elsif ev_state == "busy" -%}{%- assign p = 2 -%}{%- elsif ev_state == "closed" -%}{%- assign p = 3 -%}{%- endif -%}
+      {%- if p > cur_priority -%}{%- assign cur_priority = p -%}{%- assign cur_state = ev_state -%}{%- assign cur_reason = ev.summary -%}{%- endif -%}
+    {%- endif -%}
+    {%- if ev_state == "open" and ev_day == today -%}
+      {%- if t_has == false -%}
+        {%- assign t_has = true -%}{%- assign t_s_lbl = ev.start.dateTime | date: "%H:%M" -%}{%- assign t_e_epoch = e_abs -%}{%- assign t_e_lbl = ev.end.dateTime | date: "%H:%M" -%}
+      {%- elsif s_abs <= t_e_epoch -%}
+        {%- if e_abs > t_e_epoch -%}{%- assign t_e_epoch = e_abs -%}{%- assign t_e_lbl = ev.end.dateTime | date: "%H:%M" -%}{%- endif -%}
+      {%- else -%}
+        {%- assign t_sessions = t_sessions | append: t_s_lbl | append: "–" | append: t_e_lbl | append: "|" -%}
+        {%- assign t_s_lbl = ev.start.dateTime | date: "%H:%M" -%}{%- assign t_e_epoch = e_abs -%}{%- assign t_e_lbl = ev.end.dateTime | date: "%H:%M" -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if t_has -%}{%- assign t_sessions = t_sessions | append: t_s_lbl | append: "–" | append: t_e_lbl | append: "|" -%}{%- endif -%}
+{%- assign today_sessions = t_sessions | split: "|" -%}
+
+{%- if cur_state == "open" -%}{%- assign big_label = "OPEN" -%}{%- assign big_sub = "Renting possible" -%}
+{%- elsif cur_state == "busy" -%}{%- assign big_label = "DO NOT DISTURB" -%}{%- assign big_sub = "" -%}
+{%- else -%}{%- assign big_label = "CLOSED" -%}{%- assign big_sub = "" -%}{%- endif -%}
+{%- assign hsize = "value--xxxlarge" -%}{%- if today_sessions.size > 1 -%}{%- assign hsize = "value--xxlarge" -%}{%- endif -%}
+
+<style>
+  /* Swap the family below (and the import URL) for any Google Font you like. */
+  @import url('https://fonts.googleapis.com/css2?family=Doto:wght@100..900&display=swap');
+  .lab-cols, .lab-cols * { font-family: 'Doto', system-ui, sans-serif; }
+  .lab-cols { font-weight: 600; }
+  .lab-cols .value { font-weight: 800; }
+  .lab-cols { display:flex; width:100%; box-sizing:border-box; align-items:stretch; }
+  .lab-col-l { box-sizing:border-box; flex:0 0 58%; max-width:58%; min-width:0; padding-right:22px; border-right:2px solid #000; display:flex; flex-direction:column; }
+  .lab-col-r { box-sizing:border-box; flex:0 0 42%; max-width:42%; min-width:0; padding-left:22px; display:flex; flex-direction:column; }
+  .lab-week { flex:1 1 auto; }
+  .lab-qr { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:6px; }
+  .lab-qr img { width:96px; height:96px; display:block; }
+  .lab-today { display:flex; flex-direction:column; justify-content:center; flex:1 1 auto; }
+  .lab-foot { margin-top:8px; }
+  .lab-foot span { display:block; font-size:0.82em; line-height:1.18; }
+  .lab-row { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:5px 0; border-bottom:1px solid #000; }
+  .lab-row--today { font-weight:700; }
+  .lab-day { white-space:nowrap; }
+  .lab-hours { text-align:right; min-width:0; }
+  .lab-hours span { display:block; white-space:nowrap; }
+  .lab-hours .lab-extra { font-size:0.72em; }
+</style>
+
+<div class="layout">
+  <div class="lab-cols">
+
+    {%- comment -%} ============ COLUMN 1 — TODAY (large) ============ {%- endcomment -%}
+    <div class="lab-col-l">
+      <div class="lab-today">
+        <span class="label label--gray-2">TODAY · {{ today_label }}</span>
+
+        {%- if cur_state == "open" -%}
+          <span class="value value--large" style="margin-top:2px;">{{ big_label }}</span>
+          {%- for s in today_sessions -%}
+            {%- if forloop.index <= 2 -%}<span class="value {{ hsize }}" style="margin-top:6px;">{{ s }}</span>
+            {%- else -%}<span class="value value--large" style="margin-top:2px;">{{ s }}</span>{%- endif -%}
+          {%- endfor -%}
+          <span class="description" style="margin-top:6px;">{{ big_sub }}</span>
+        {%- else -%}
+          <span class="value value--xxlarge" style="line-height:1.05; margin-top:2px;">{{ big_label }}</span>
+          {%- if cur_reason != "" and cur_state == "closed" -%}<span class="description" style="margin-top:2px;">{{ cur_reason }}</span>{%- endif -%}
+          <span class="label label--gray-2" style="margin-top:10px;">Hours today</span>
+          {%- if today_sessions.size > 0 -%}
+            {%- for s in today_sessions -%}
+              {%- if forloop.index <= 2 -%}<span class="value">{{ s }}</span>
+              {%- else -%}<span class="label label--gray-2">{{ s }}</span>{%- endif -%}
+            {%- endfor -%}
+          {%- else -%}
+            <span class="value">—</span>
+          {%- endif -%}
+        {%- endif -%}
+      </div>
+      <div class="lab-foot">
+        <span class="label label--gray-2">{{ info_line_1 }}</span>
+        <span class="label label--gray-2">{{ info_line_2 }}</span>
+      </div>
+    </div>
+
+    {%- comment -%} ============ COLUMN 2 — THIS WEEK ============ {%- endcomment -%}
+    <div class="lab-col-r">
+      <span class="title" style="display:block; margin-bottom:4px;">THIS WEEK</span>
+      <div class="lab-week">
+      {%- for d in (0..4) -%}
+        {%- assign day_secs = d | times: 86400 -%}
+        {%- assign day_ts = monday_local | plus: day_secs -%}
+        {%- assign day_date = day_ts | date: "%Y-%m-%d" -%}
+        {%- assign day_date_n = day_date | remove: "-" | plus: 0 -%}
+        {%- assign day_wd = day_ts | date: "%a" -%}
+        {%- assign day_dom = day_ts | date: "%-d" -%}
+        {%- assign is_today = false -%}{%- if day_date == today -%}{%- assign is_today = true -%}{%- endif -%}
+
+        {%- assign d_has_closed = false -%}{%- assign d_has_busy = false -%}
+        {%- assign d_sessions = "" -%}
+        {%- assign d_has = false -%}{%- assign d_e_epoch = 0 -%}{%- assign d_s_lbl = "" -%}{%- assign d_e_lbl = "" -%}
+
+        {%- for ev in items -%}
+          {%- assign sum_lc = ev.summary | default: "" | downcase -%}
+          {%- assign ev_state = default_state -%}{%- assign matched = false -%}
+          {%- for kw in closed_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "closed" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}
+          {%- unless matched -%}{%- for kw in busy_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "busy" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+          {%- unless matched -%}{%- for kw in open_kws -%}{%- if kw != "" and sum_lc contains kw -%}{%- assign ev_state = "open" -%}{%- assign matched = true -%}{%- break -%}{%- endif -%}{%- endfor -%}{%- endunless -%}
+
+          {%- if ev.start.date -%}
+            {%- assign s_n = ev.start.date | remove: "-" | plus: 0 -%}
+            {%- assign e_n = ev.end.date | remove: "-" | plus: 0 -%}
+            {%- if day_date_n >= s_n and day_date_n < e_n -%}
+              {%- if ev_state == "closed" -%}{%- assign d_has_closed = true -%}{%- elsif ev_state == "busy" -%}{%- assign d_has_busy = true -%}{%- endif -%}
+            {%- endif -%}
+          {%- else -%}
+            {%- assign ev_day = ev.start.dateTime | date: "%Y-%m-%d" -%}
+            {%- if ev_day == day_date -%}
+              {%- if ev_state == "open" -%}
+                {%- assign es = ev.start.dateTime | date: "%s" | plus: 0 -%}
+                {%- assign ee = ev.end.dateTime | date: "%s" | plus: 0 -%}
+                {%- if d_has == false -%}
+                  {%- assign d_has = true -%}{%- assign d_s_lbl = ev.start.dateTime | date: "%H:%M" -%}{%- assign d_e_epoch = ee -%}{%- assign d_e_lbl = ev.end.dateTime | date: "%H:%M" -%}
+                {%- elsif es <= d_e_epoch -%}
+                  {%- if ee > d_e_epoch -%}{%- assign d_e_epoch = ee -%}{%- assign d_e_lbl = ev.end.dateTime | date: "%H:%M" -%}{%- endif -%}
+                {%- else -%}
+                  {%- assign d_sessions = d_sessions | append: d_s_lbl | append: "–" | append: d_e_lbl | append: "|" -%}
+                  {%- assign d_s_lbl = ev.start.dateTime | date: "%H:%M" -%}{%- assign d_e_epoch = ee -%}{%- assign d_e_lbl = ev.end.dateTime | date: "%H:%M" -%}
+                {%- endif -%}
+              {%- elsif ev_state == "closed" -%}{%- assign d_has_closed = true -%}
+              {%- elsif ev_state == "busy" -%}{%- assign d_has_busy = true -%}{%- endif -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- if d_has -%}{%- assign d_sessions = d_sessions | append: d_s_lbl | append: "–" | append: d_e_lbl | append: "|" -%}{%- endif -%}
+        {%- assign day_list = d_sessions | split: "|" -%}
+
+        <div class="lab-row{% if is_today %} lab-row--today{% endif %}">
+          <span class="lab-day">{{ day_wd }} {{ day_dom }}{% if is_today %} · Today{% endif %}</span>
+          <span class="lab-hours">
+            {%- if day_list.size > 0 -%}
+              {%- for s in day_list -%}
+                {%- if forloop.index <= 2 -%}<span>{{ s }}</span>
+                {%- else -%}<span class="lab-extra">{{ s }}</span>{%- endif -%}
+              {%- endfor -%}
+              {%- if d_has_busy -%}<span class="lab-extra">+ DND</span>{%- endif -%}
+            {%- elsif d_has_closed -%}<span>Closed</span>
+            {%- elsif d_has_busy -%}<span>DND</span>
+            {%- else -%}<span>Closed</span>{%- endif -%}
+          </span>
+        </div>
+      {%- endfor -%}
+      </div>
+
+      <div class="lab-qr">
+        <span class="label label--gray-2" style="text-align:right; line-height:1.1;">Scan for<br/>full calendar</span>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=96x96&qzone=2&data={{ cal_link | url_encode }}" alt="calendar QR"/>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="title_bar">
+  <span class="title">{{ lab_name | default: "Lab" }}</span>
+  <span class="instance">Equipment rental</span>
+</div>

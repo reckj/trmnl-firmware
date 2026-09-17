@@ -1,0 +1,86 @@
+---
+strategy: polling
+no_screen_padding: 'no'
+dark_mode: 'no'
+static_data: ''
+polling_verb: get
+framework_version: 3.1.1
+serverless_language: ''
+polling_url: 'https://www.googleapis.com/calendar/v3/calendars/{{ trmnl.plugin_settings.custom_fields_values.calendar_id | url_encode }}/events?key={{ trmnl.plugin_settings.custom_fields_values.api_key }}&singleEvents=true&orderBy=startTime&maxResults=50&timeMin={{ "now" | date: "%Y-%m-%d" }}T00:00:00Z'
+polling_headers: ''
+polling_body: ''
+oauth_enabled: 'false'
+oauth_pkce_enabled: 'no'
+oauth_authorize_url: ''
+oauth_token_url: ''
+oauth_scopes: ''
+oauth_scope_separator: ''
+oauth_refresh_url: ''
+oauth_auth_params: ''
+oauth_token_headers: ''
+oauth_token_site: ''
+oauth_token_params: ''
+oauth_token_request_auth_method: ''
+oauth_body_format: ''
+oauth_token_response_metadata: ''
+oauth_authorization_method: ''
+oauth_refresh_params: ''
+oauth_token_field_name: ''
+oauth_expiry_field_name: ''
+oauth_expiry_strategy: ''
+oauth_fixed_expiry_ms: ''
+custom_fields:
+- keyname: lab_name
+  name: Lab name
+  field_type: text
+  default: Lab
+  description: Shown in the title bar.
+- keyname: calendar_id
+  name: Google Calendar ID
+  field_type: text
+  description: e.g. abc123@group.calendar.google.com (calendar must be public).
+- keyname: api_key
+  name: Google API key
+  field_type: password
+  description: API key restricted to the Google Calendar API.
+- keyname: calendar_link
+  name: Calendar link for QR (optional)
+  field_type: text
+  description: URL the bottom-right QR code points to. Leave blank to auto-build a public embed link from the Calendar ID.
+- keyname: open_keywords
+  name: OPEN keywords
+  field_type: text
+  default: open
+  description: Comma-separated words. If an event title contains any of these it counts as OPEN. Matching is case-insensitive.
+- keyname: busy_keywords
+  name: BUSY / DND keywords
+  field_type: text
+  default: busy,dnd,do not disturb,reserved,maintenance,workshop,in use
+  description: Title words that mean BUSY / do-not-disturb. Case-insensitive.
+- keyname: closed_keywords
+  name: CLOSED keywords
+  field_type: text
+  default: closed,holiday,vacation,public holiday
+  description: Title words that mean CLOSED / holiday. Case-insensitive.
+- keyname: default_state
+  name: Default state for unmatched events
+  field_type: select
+  default: open
+  options:
+  - open
+  - busy
+  - closed
+  description: Used when an event title matches none of the keyword lists above.
+- keyname: info_line_1
+  name: Info line 1 (bottom of main column)
+  field_type: text
+  default: rental during lab opening hours - mail for urgent requests
+  description: First small line shown under the current status.
+- keyname: info_line_2
+  name: Info line 2 (contacts)
+  field_type: text
+  default: 'Contact: Luke Franzke, Johannes Reck, Luca Somm'
+  description: Second small line shown under the current status.
+name: Lab Opening Times X
+description: TRMNL X variant, scaled
+refresh_interval: 15
